@@ -63,3 +63,12 @@ node_modules/
 .npm/
 .yarn/*
 .pnpm-store/
+
+# Secrets 
+.env
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+service-account*.json
