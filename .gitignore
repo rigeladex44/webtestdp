@@ -1,0 +1,65 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+*.code-workspace
+.idea/
+*.swp
+
+# Logs & deps
+*.log
+logs/
+node_modules/
+dist/
+build/
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+.venv*/
+
+# Java/Android
+.gradle/
+build/
+*.iml
+/local.properties
+
+# iOS
+DerivedData/
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# PHP/Laravel
+/vendor/
+/storage/*.key
+
+# Flutter
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.melos_tool/
+
+# Secrets
+.env
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+service-account*.json
+# Node
+node_modules/
+.npm/
+.yarn/*
+.pnpm-store/

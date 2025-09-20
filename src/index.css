@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base */
+@layer base {
+  html, body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+  h1,h2,h3,h4 { @apply font-semibold tracking-tight; }
+  a { @apply text-muted-foreground no-underline transition-colors; }
+  a:hover { @apply text-foreground; }
+  small,.muted { @apply text-muted-foreground; }
+}
+
+/* Components */
+@layer components {
+  .card { @apply rounded-xl border bg-card shadow-sm; }
+  .nav-item { @apply block rounded-md px-3 py-2 text-sm font-medium transition-colors; }
+  .nav-item-muted { @apply text-muted-foreground hover:text-foreground hover:bg-muted/60; }
+  .nav-item-active { @apply bg-primary/20 text-primary; }
+}
+
+/* Theme variables */
+@layer base {
+  /* ===== Konten terang (default) ===== */
+  :root {
+    --background: 210 20% 98%;         /* backgrond halaman */
+    --foreground: 0 0% 6%;             /* sidebar*/
+
+    --card: 0 0% 100%;
+    --card-foreground: var(--foreground);
+    --popover: 0 0% 100%;
+    --popover-foreground: var(--foreground);
+
+    --primary: 142 71% 45%;            /* biru brand */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 18% 96%;
+    --secondary-foreground: 0 0% 12%;
+
+    --muted: 210 18% 96%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 210 18% 92%;
+    --accent-foreground: 0 0% 12%;
+
+    --destructive: 0 62% 31%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 14% 89%;
+    --input: var(--border);
+    --ring: 142 71% 45%;
+    --radius: 0.5rem;
+  }
+
+  /* Sidebar gelap (aktifkan dengan class .sidebar-dark pada <aside>) */
+  .sidebar-dark {
+    --secondary: 220 14% 10%;          /* abu gelap ~ hitam */
+    --secondary-foreground: 0 0% 98%;  /* teks putih */
+    --foreground: 0 0% 98%;
+    --muted: 220 14% 14%;
+    --muted-foreground: 0 0% 80%;
+    --accent: 220 14% 18%;
+    --accent-foreground: 0 0% 100%;
+    --border: 220 14% 18%;
+    --ring: 217 91% 60%;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,.07); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(33,150,243,.35); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(33,150,243,.6); }
