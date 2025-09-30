@@ -72,3 +72,4 @@ node_modules/
 *.keystore
 *.jks
 service-account*.json
+.env.local
