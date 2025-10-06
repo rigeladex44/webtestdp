@@ -13,7 +13,10 @@ import autoTable from 'jspdf-autotable';
 const todayISO = new Date().toISOString().slice(0, 10);
 
 // helpers
+const isInType  = (t) => ['Masuk', 'income', 'Debit'].includes(String(t || '').trim());
+const isOutType = (t) => ['Keluar', 'expense', 'Kredit'].includes(String(t || '').trim());
 const sum = (arr, sel) => arr.reduce((s, x) => s + sel(x), 0);
+
 function groupByCategory(rows) {
   const map = new Map();
   for (const r of rows) {
@@ -34,10 +37,10 @@ export default function ProfitLossPage() {
   const me = useMemo(() => getCurrentUser(), []);
   const isDirector = me?.role === 'direktur';
 
-  const [ptFilter, setPtFilter] = useState(() => 
+  const [ptFilter, setPtFilter] = useState(() =>
     isDirector ? [me.pt] : PT_LIST.map(p => p.fullName)
   );
-  
+
   const [fromDate, setFromDate] = useState(todayISO);
   const [toDate, setToDate] = useState(todayISO);
 
@@ -61,15 +64,16 @@ export default function ProfitLossPage() {
     };
     const base = transactions.filter(t => within(t.date) && byPT(t));
     const rows = [...base].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-    
-    const income = rows.filter(t => t.type === 'Masuk');
-    const expense = rows.filter(t => t.type === 'Keluar');
 
-    const incomeTotal = sum(income, x => x.amount);
+    // fleksibel tipe
+    const income  = rows.filter(t => isInType(t.type));
+    const expense = rows.filter(t => isOutType(t.type));
+
+    const incomeTotal  = sum(income,  x => x.amount);
     const expenseTotal = sum(expense, x => x.amount);
     const netTotal = incomeTotal - expenseTotal;
 
-    const incomeByCat = groupByCategory(income);
+    const incomeByCat  = groupByCategory(income);
     const expenseByCat = groupByCategory(expense);
 
     return { rows, incomeTotal, expenseTotal, netTotal, incomeByCat, expenseByCat };
@@ -82,7 +86,7 @@ export default function ProfitLossPage() {
       PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt || '',
       t.category || '',
       t.operator || '',
-      t.type,
+      isInType(t.type) ? 'Masuk' : 'Keluar',
       t.desc || '',
       t.amount.toString(),
     ]);
@@ -105,10 +109,10 @@ export default function ProfitLossPage() {
     const margin = 40;
     const pageWidth = doc.internal.pageSize.getWidth();
     const kasir = me?.name || me?.username || 'N/A';
-    
+
     doc.setFontSize(14); doc.setFont(undefined, 'bold');
     doc.text('LAPORAN LABA RUGI', pageWidth / 2, margin, { align: 'center' });
-    
+
     doc.setFontSize(10); doc.setFont(undefined, 'normal');
     const ptTitle = isDirector ? me.pt : (ptFilter.length === PT_LIST.length ? 'SEMUA PERUSAHAAN' : ptFilter.join(' - '));
     doc.text(ptTitle, pageWidth / 2, margin + 12, { align: 'center' });
@@ -126,10 +130,18 @@ export default function ProfitLossPage() {
       ],
       columnStyles: { 1: { halign: 'right' } },
     });
-    
+
     const tableBody = rows.map(t => {
       const ptTag = PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt;
-      return [t.date, ptTag, t.desc, t.category, t.operator, t.type, { content: fmtIDR(t.amount), styles: { halign: 'right' } }];
+      return [
+        t.date,
+        ptTag,
+        t.desc,
+        t.category,
+        t.operator,
+        isInType(t.type) ? 'Masuk' : 'Keluar',
+        { content: fmtIDR(t.amount), styles: { halign: 'right' } }
+      ];
     });
 
     autoTable(doc, {
@@ -150,7 +162,7 @@ export default function ProfitLossPage() {
       head: [['Disusun Oleh', 'Diperiksa Oleh', 'Mengetahui']],
       body: [[`( ${kasir} )`, '( _______________ )', '( _______________ )']],
     });
-    
+
     doc.save(`laba-rugi_${fromDate}_${toDate}.pdf`);
   };
 
@@ -222,7 +234,9 @@ export default function ProfitLossPage() {
                   <td>{PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt || '-'}</td>
                   <td>{t.category || '-'}</td>
                   <td>{t.operator || '-'}</td>
-                  <td className={t.type === 'Masuk' ? 'text-green-600' : 'text-red-500'}>{t.type}</td>
+                  <td className={isInType(t.type) ? 'text-green-600' : 'text-red-500'}>
+                    {isInType(t.type) ? 'Masuk' : 'Keluar'}
+                  </td>
                   <td>{t.desc || '-'}</td>
                   <td className="text-right">{fmtIDR(t.amount)}</td>
                 </tr>

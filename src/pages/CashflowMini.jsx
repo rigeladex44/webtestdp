@@ -29,6 +29,10 @@ function getKasirName() {
   return 'Kasir';
 }
 
+// helper tipe agar kompatibel data lama & baru
+const isInType  = (t) => ['Masuk', 'income', 'Debit'].includes(String(t || '').trim());
+const isOutType = (t) => ['Keluar', 'expense', 'Kredit'].includes(String(t || '').trim());
+
 export default function CashflowMini() {
   const { transactions, add, update, remove } = useTransactions();
   const { toast } = useToast();
@@ -36,7 +40,7 @@ export default function CashflowMini() {
   const me = useMemo(() => getCurrentUser(), []);
   const isDirector = me?.role === 'direktur';
 
-  const [ptFilter, setPtFilter] = useState(() => 
+  const [ptFilter, setPtFilter] = useState(() =>
     isDirector ? [me.pt] : PT_LIST.map(p => p.fullName)
   );
   const makeEmpty = () => ({
@@ -56,15 +60,23 @@ export default function CashflowMini() {
   const [editRow, setEditRow] = useState(null);
 
   const { inCash, outCash, saldo, list } = useMemo(() => {
-    const base = transactions.filter((t) => t.date === todayISO).sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+    // hanya data hari ini
+    const base = transactions
+      .filter((t) => t.date === todayISO)
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+
     const byPT = (t) => {
       if (isDirector) return (t.pt || '') === me.pt;
       if (ptFilter.length === 0) return false;
       return ptFilter.includes(t.pt || '');
     };
-    const rows = base.filter(byPT);
-    const inCash  = rows.filter(t => t.type === 'Masuk').reduce((s,t)=>s+t.amount, 0);
-    const outCash = rows.filter(t => t.type === 'Keluar').reduce((s,t)=>s+t.amount, 0);
+
+    // KUNCI: hanya transaksi yang mempengaruhi kas kecil
+    const rows = base.filter(byPT).filter((t) => t.affectsCash === true);
+
+    const inCash  = rows.filter((t) => isInType(t.type)).reduce((s, t) => s + t.amount, 0);
+    const outCash = rows.filter((t) => isOutType(t.type)).reduce((s, t) => s + t.amount, 0);
+
     return { inCash, outCash, saldo: inCash - outCash, list: rows };
   }, [transactions, ptFilter, isDirector, me]);
 
@@ -73,22 +85,65 @@ export default function CashflowMini() {
     const amt = Number(String(form.amount).replace(/[^\d.-]/g, ''));
     if (!form.desc.trim()) return toast({ title: 'Deskripsi wajib diisi', type: 'error' });
     if (!amt || amt <= 0)  return toast({ title: 'Jumlah harus > 0', type: 'error' });
-    add({ date: todayISO, pt: form.pt, desc: form.desc, category: form.category, type: form.type, amount: amt, createdAt: Date.now() });
+
+    // semua entri via modul ini = kas kecil (cash) → paksa affectsCash: true
+    add({
+      date: todayISO,
+      pt: form.pt,
+      desc: form.desc,
+      category: form.category,
+      type: form.type,                 // 'Masuk' | 'Keluar'
+      amount: amt,
+      createdAt: Date.now(),
+      // metadata kas kecil:
+      affectsCash: true,
+      actorType: 'internal',
+      kind: 'kas_kecil',
+      payMethod: 'Tunai',
+    });
+
     setForm(makeEmpty());
     toast({ title: 'Transaksi ditambahkan', type: 'success' });
   };
-  
-  const startEdit = (row) => { setEditId(row.id); setEditRow({ ...row, amount: String(row.amount), pt: row.pt || (isDirector ? me.pt : PT_LIST[0].fullName) }); };
+
+  const startEdit = (row) => {
+    setEditId(row.id);
+    setEditRow({
+      ...row,
+      amount: String(row.amount),
+      pt: row.pt || (isDirector ? me.pt : PT_LIST[0].fullName),
+    });
+  };
   const cancelEdit = () => { setEditId(null); setEditRow(null); };
+
   const saveEdit = () => {
     const amt = Number(String(editRow.amount).replace(/[^\d.-]/g, ''));
-    if (!editRow.desc.trim() || !amt || amt <= 0) return toast({ title: 'Data tidak valid', type: 'error' });
-    update(editId, { date: todayISO, pt: editRow.pt, desc: editRow.desc, category: editRow.category, type: editRow.type, amount: amt, createdAt: editRow.createdAt ?? Date.now() });
-    cancelEdit(); toast({ title: 'Perubahan disimpan', type: 'success' });
+    if (!editRow.desc.trim() || !amt || amt <= 0)
+      return toast({ title: 'Data tidak valid', type: 'error' });
+
+    update(editId, {
+      date: todayISO,
+      pt: editRow.pt,
+      desc: editRow.desc,
+      category: editRow.category,
+      type: editRow.type,            // tetap hormati pilihan
+      amount: amt,
+      createdAt: editRow.createdAt ?? Date.now(),
+      // pastikan tetap kas kecil
+      affectsCash: true,
+      actorType: editRow.actorType || 'internal',
+      kind: editRow.kind || 'kas_kecil',
+      payMethod: editRow.payMethod || 'Tunai',
+    });
+
+    cancelEdit();
+    toast({ title: 'Perubahan disimpan', type: 'success' });
   };
+
   const deleteRow = (id) => {
     if (!confirm('Hapus transaksi ini?')) return;
-    remove(id); if (editId === id) cancelEdit();
+    remove(id);
+    if (editId === id) cancelEdit();
     toast({ title: 'Transaksi dihapus', type: 'success' });
   };
 
@@ -96,14 +151,17 @@ export default function CashflowMini() {
     let running = 0;
     const header = ['NO','Tanggal','PT','SUBJEK','Kategori','Diinput Oleh','MASUK (Rp)','KELUAR (Rp)','SALDO (Rp)'];
     const rows = list.map((t, i) => {
-      const Masuk  = t.type === 'Masuk'  ? t.amount : 0;
-      const Keluar = t.type === 'Keluar' ? t.amount : 0;
+      const Masuk  = isInType(t.type)  ? t.amount : 0;
+      const Keluar = isOutType(t.type) ? t.amount : 0;
       running += (Masuk - Keluar);
       const ptTag = PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt;
-      return [ String(i + 1), t.date, ptTag || '', t.desc || '', t.category || '', t.operator || '', Masuk.toString(), Keluar.toString(), running.toString() ];
+      return [
+        String(i + 1), t.date, ptTag || '', t.desc || '', t.category || '',
+        t.operator || '', Masuk.toString(), Keluar.toString(), running.toString()
+      ];
     });
-    const totalMasuk  = list.reduce((s,t) => s + (t.type === 'Masuk' ? t.amount : 0), 0);
-    const totalKeluar = list.reduce((s,t) => s + (t.type === 'Keluar' ? t.amount : 0), 0);
+    const totalMasuk  = list.reduce((s,t) => s + (isInType(t.type)  ? t.amount : 0), 0);
+    const totalKeluar = list.reduce((s,t) => s + (isOutType(t.type) ? t.amount : 0), 0);
     const totalSaldo  = totalMasuk - totalKeluar;
     rows.push([]);
     rows.push(['','','','','','GRAND TOTAL', totalMasuk.toString(), totalKeluar.toString(), totalSaldo.toString()]);
@@ -121,22 +179,22 @@ export default function CashflowMini() {
 
     doc.setFontSize(14); doc.setFont(undefined, 'bold');
     doc.text('LAPORAN KAS KECIL', pageWidth / 2, margin, { align: 'center' });
-    
+
     doc.setFontSize(10); doc.setFont(undefined, 'normal');
     const ptTitle = isDirector ? me.pt : (ptFilter.length === PT_LIST.length ? 'SEMUA PERUSAHAAN' : ptFilter.join(' - '));
     doc.text(ptTitle, pageWidth / 2, margin + 12, { align: 'center' });
-    
+
     autoTable(doc, {
       startY: margin + 24, margin: { left: margin, right: margin }, theme: 'grid',
       styles: { fontSize: 9, cellPadding: 5, lineWidth: 0.5, lineColor: 200 }, head: [],
       body: [ ['Hari', hari, 'Kasir', kasir], ['Tanggal',  todayLabel, '',    ''] ],
       columnStyles: { 0: { fontStyle: 'bold' }, 2: { fontStyle: 'bold' } },
     });
-    
+
     let runningBalance = 0;
     const tableBody = list.map((t, i) => {
-      const Masuk  = t.type === 'Masuk'  ? t.amount : 0;
-      const Keluar = t.type === 'Keluar' ? t.amount : 0;
+      const Masuk  = isInType(t.type)  ? t.amount : 0;
+      const Keluar = isOutType(t.type) ? t.amount : 0;
       runningBalance += (Masuk - Keluar);
       const ptTag = PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt;
       return [ i + 1, ptTag, t.desc, t.operator, fmtIDR(Masuk), fmtIDR(Keluar), fmtIDR(runningBalance) ];
@@ -151,9 +209,9 @@ export default function CashflowMini() {
       foot: [
         [
           { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } },
-          { content: fmtIDR(inCash), styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } },
-          { content: fmtIDR(outCash), styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } },
-          { content: fmtIDR(saldo), styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } }
+          { content: fmtIDR(list.reduce((s,t)=>s+(isInType(t.type)?t.amount:0),0)), styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } },
+          { content: fmtIDR(list.reduce((s,t)=>s+(isOutType(t.type)?t.amount:0),0)), styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } },
+          { content: fmtIDR(list.reduce((s,t)=>s+(isInType(t.type)?t.amount:0)-(isOutType(t.type)?t.amount:0),0)), styles: { halign: 'right', fontStyle: 'bold', textColor: [0,0,0] } }
         ]
       ],
       footStyles: { fontSize: 8, cellPadding: 4, fillColor: [255, 255, 255] },
@@ -172,7 +230,7 @@ export default function CashflowMini() {
       head: [['Kasir', 'M. Keuangan', 'DIREKTUR']],
       body: [[`( ${kasir} )`, '( _______________ )', '( _______________ )']],
     });
-    
+
     doc.save(`arus-kas-kecil_${todayISO}.pdf`);
   };
 
@@ -202,11 +260,13 @@ export default function CashflowMini() {
           <Button type="button" onClick={exportPDF}>Export PDF</Button>
         </div>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card title="Kas Masuk (hari ini)" value={fmtIDR(inCash)} />
         <Card title="Kas Keluar (hari ini)" value={fmtIDR(outCash)} />
         <Card title="Saldo (hari ini)" value={fmtIDR(saldo)} highlight />
       </div>
+
       <form onSubmit={onSubmit} className="card p-4 grid grid-cols-1 md:grid-cols-7 gap-3">
         <div>
           <label className="text-sm block">Tanggal</label>
@@ -255,6 +315,7 @@ export default function CashflowMini() {
           </Button>
         </div>
       </form>
+
       <div className="card p-4">
         <div className="text-sm text-muted-foreground mb-2">Transaksi hari ini</div>
         <div className="overflow-x-auto">
@@ -285,7 +346,7 @@ export default function CashflowMini() {
                     <td>
                       {isEditing ? (
                         <select className="h-8 w-full rounded-md border bg-background px-2 text-sm" value={editRow.category} onChange={(e) => setEditRow({ ...editRow, category: e.target.value })}>
-                           <optgroup label="Pemasukan">
+                          <optgroup label="Pemasukan">
                             {CATEGORY_LIST.filter(c => c.type === 'Masuk').map(cat => (
                               <option key={cat.name} value={cat.name}>{cat.name}</option>
                             ))}
@@ -304,9 +365,15 @@ export default function CashflowMini() {
                         <select className="h-8 w-full rounded-md border bg-background px-2 text-sm" value={editRow.type} onChange={(e) => setEditRow({ ...editRow, type: e.target.value })}>
                           <option value="Masuk">Masuk</option><option value="Keluar">Keluar</option>
                         </select>
-                      ) : (t.type)}
+                      ) : (isInType(t.type) ? 'Masuk' : 'Keluar')}
                     </td>
-                    <td className={`text-right ${t.type === 'Masuk' ? 'text-green-500' : 'text-red-400'}`}>{isEditing ? <Input className="h-8 text-right" inputMode="numeric" value={editRow.amount} onChange={(e) => setEditRow({ ...editRow, amount: e.target.value })} /> : <>{t.type === 'Masuk' ? '+' : '-'} {fmtIDR(t.amount)}</>}</td>
+                    <td className={`text-right ${isInType(t.type) ? 'text-green-500' : 'text-red-400'}`}>
+                      {isEditing ? (
+                        <Input className="h-8 text-right" inputMode="numeric" value={editRow.amount} onChange={(e) => setEditRow({ ...editRow, amount: e.target.value })} />
+                      ) : (
+                        <>{isInType(t.type) ? '+' : '-'} {fmtIDR(t.amount)}</>
+                      )}
+                    </td>
                     <td className="text-right">
                       {isEditing ? (
                         <div className="flex gap-2 justify-end">

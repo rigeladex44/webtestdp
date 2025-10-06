@@ -1,59 +1,92 @@
 // src/components/Sidebar.jsx
-import React, { useMemo } from 'react';
-import { NavLink } from 'react-router-dom';
-import { NAV } from '@/nav.jsx'; // Mengambil data menu
-import { getCurrentUser } from '@/lib/auth.js';
-import { ChevronLeft } from 'lucide-react';
+import React, { useMemo, useEffect } from "react";
+import { NavLink } from "react-router-dom";
+import { NAV } from "../nav.jsx";
+import { getCurrentUser } from "../lib/auth.js";
 
-// === Komponen-komponen dari Sidebar lama Anda, kita gunakan lagi ===
-
-function Brand({ collapsed, onToggle }) {
-  const LOGO_URL = '/logo-sje.png'; // Pastikan logo ini ada di folder /public
-  const [imgOk, setImgOk] = React.useState(true);
+/** Bar paling atas: LOGO + (Nama & Jabatan di sebelah logo saat expanded) */
+function BrandBar({ collapsed, user }) {
+  const LOGO_URL = "/logo-sje.png";
+  const initials =
+    (user?.name || "U")
+      .split(" ")
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase())
+      .join("") || "U";
 
   return (
-    <div className="flex h-14 items-center justify-between border-b border-slate-800 px-4">
-      {collapsed ? (
-        <div className="w-10 h-10 grid place-items-center">
-          <img src={LOGO_URL} alt="SJ" className="h-8 w-auto" onError={() => setImgOk(false)} />
-        </div>
-      ) : (
-        <img src={LOGO_URL} alt="Sumber Jaya Grup" className="h-9 w-auto" onError={() => setImgOk(false)} />
-      )}
-      {!collapsed && (
-        <button
-          className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/20 hover:bg-white/10"
-          onClick={onToggle} aria-label="Toggle sidebar" title="Perkecil"
-        >
-          <ChevronLeft className="h-4 w-4 transition-transform" />
-        </button>
-      )}
+    <div className="relative flex h-14 items-center border-b border-slate-800 px-2 pr-10">
+      <div
+        className={`flex-1 flex items-center gap-2 ${
+          collapsed ? "justify-center" : "justify-start"
+        }`}
+      >
+        {/* Logo ukuran tetap */}
+        <img src={LOGO_URL} alt="Logo" className="h-8 w-auto" />
+
+        {/* Nama & jabatan di SEBELAH logo (hanya saat expanded) */}
+        {!collapsed && (
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">
+              {user?.name || "Nama Karyawan"}
+            </div>
+            <div className="truncate text-xs text-white/70">
+              {user?.role || "Jabatan"}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function Section({ group, collapsed }) {
+function Section({ group, collapsed, onItemClick }) {
   return (
     <div>
-      {!collapsed && <div className="px-3 text-[11px] uppercase tracking-wider mb-2 text-white/60">{group.group}</div>}
+      {!collapsed && (
+        <div className="px-3 text-[11px] uppercase tracking-wider mb-2 text-white/60">
+          {group.group}
+        </div>
+      )}
       <nav className="flex flex-col gap-1">
         {group.children.map((item) => (
-          <SidebarLink key={item.path} item={item} collapsed={collapsed} />
+          <SidebarLink
+            key={item.path}
+            item={item}
+            collapsed={collapsed}
+            onItemClick={onItemClick}
+          />
         ))}
       </nav>
     </div>
   );
 }
 
-function SidebarLink({ item, collapsed }) {
-  const base   = 'relative group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors';
-  const idle   = 'text-white/70 hover:text-white hover:bg-white/10';
-  const active = 'bg-white/10 text-white shadow-sm';
+function SidebarLink({ item, collapsed, onItemClick }) {
+  const base =
+    "relative group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors";
+  const idle = "text-white/70 hover:text-white hover:bg-white/10";
+  const active = "bg-white/10 text-white shadow-sm";
+
+  // Tutup drawer SETELAH trigger NavLink agar navigasi tidak ter-cancel
+  const handleClick = () => {
+    if (typeof onItemClick === "function") {
+      setTimeout(onItemClick, 0);
+    }
+  };
 
   return (
-    <NavLink to={item.path} title={item.label} end={item.path === '/dashboard'} className={({ isActive }) => [base, isActive ? active : idle].join(' ')}>
+    <NavLink
+      to={item.path}
+      end={item.path === "/dashboard"}
+      title={item.label}
+      onClick={handleClick}
+      className={({ isActive }) => [base, isActive ? active : idle].join(" ")}
+    >
       <item.icon className="h-5 w-5 shrink-0" />
       {!collapsed && <span className="truncate">{item.label}</span>}
+
+      {/* Tooltip saat collapsed */}
       {collapsed && (
         <span className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-100 shadow-md group-hover:block z-50">
           {item.label}
@@ -63,32 +96,60 @@ function SidebarLink({ item, collapsed }) {
   );
 }
 
-
-// === Komponen Utama Sidebar (Gabungan) ===
-
-export default function Sidebar({ isDesktopCollapsed, onDesktopToggle, isMobileNavOpen, setIsMobileNavOpen }) {
-  // Logika penyaringan menu berdasarkan peran (dari kode lama Anda)
-  const me = useMemo(() => {
-    try { return getCurrentUser(); } catch { return null; }
+export default function Sidebar({
+  isDesktopCollapsed,
+  onDesktopToggle,        // disimpan untuk kompatibilitas
+  isMobileNavOpen,
+  setIsMobileNavOpen,
+}) {
+  // Ambil user untuk filter role & penampilan nama/jabatan
+  const user = useMemo(() => {
+    try {
+      return getCurrentUser();
+    } catch {
+      return null;
+    }
   }, []);
-  const role = me?.role || 'kasir';
+  const role = user?.role || "kasir";
 
   const visibleNav = useMemo(() => {
     return NAV
-      .map(group => ({
+      .map((group) => ({
         ...group,
-        children: group.children.filter(item => !item.roles || item.roles.includes(role))
+        children: group.children.filter(
+          (item) => !item.roles || item.roles.includes(role)
+        ),
       }))
-      .filter(group => group.children.length > 0);
+      .filter((group) => group.children.length > 0);
   }, [role]);
 
-  // Konten navigasi yang bisa dipakai ulang
-  const NavContent = ({ collapsed, onToggle }) => (
+  // ESC menutup drawer mobile
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") setIsMobileNavOpen(false);
+    };
+    if (isMobileNavOpen) window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isMobileNavOpen, setIsMobileNavOpen]);
+
+  // Tutup drawer hanya kalau benar-benar mobile
+  const closeIfMobile = () => {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setIsMobileNavOpen(false);
+    }
+  };
+
+  const NavContent = ({ collapsed }) => (
     <>
-      <Brand collapsed={collapsed} onToggle={onToggle} />
+      <BrandBar collapsed={collapsed} user={user} />
       <div className="flex-1 space-y-4 overflow-y-auto p-2">
         {visibleNav.map((group) => (
-          <Section key={group.group} collapsed={collapsed} group={group} />
+          <Section
+            key={group.group}
+            collapsed={collapsed}
+            group={group}
+            onItemClick={closeIfMobile}
+          />
         ))}
       </div>
     </>
@@ -96,20 +157,49 @@ export default function Sidebar({ isDesktopCollapsed, onDesktopToggle, isMobileN
 
   return (
     <>
-      {/* --- Sidebar untuk Desktop --- */}
-      <aside className={`hidden md:flex md:flex-col border-r transition-all duration-300 bg-slate-900 text-white border-slate-800 ${isDesktopCollapsed ? 'w-20' : 'w-64'}`}>
-        <NavContent collapsed={isDesktopCollapsed} onToggle={onDesktopToggle} />
+      {/* DESKTOP SIDEBAR — sticky full-height + internal scroll */}
+      <aside
+        role="navigation"
+        className={`hidden md:flex md:flex-col border-r sidebar-dark bg-slate-900 text-white transition-[width] duration-300
+          md:sticky md:top-0 md:self-start md:h-screen md:overflow-y-auto
+          ${isDesktopCollapsed ? "w-20" : "w-64"}
+        `}
+      >
+        <NavContent collapsed={isDesktopCollapsed} />
       </aside>
 
-      {/* --- Sidebar untuk Mobile (sebagai overlay) --- */}
-      {isMobileNavOpen && (
-        <>
-          <div onClick={() => setIsMobileNavOpen(false)} className="fixed inset-0 z-40 bg-black/60 md:hidden" />
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-slate-900 text-white border-slate-800 md:hidden">
-            <NavContent collapsed={false} onToggle={() => setIsMobileNavOpen(false)} />
-          </aside>
-        </>
-      )}
+      {/* MOBILE OVERLAY — klik overlay untuk menutup */}
+      <div
+        aria-hidden={!isMobileNavOpen}
+        onClick={() => setIsMobileNavOpen(false)}
+        className={`fixed inset-0 z-40 bg-black/60 md:hidden transition-opacity ${
+          isMobileNavOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+      />
+
+      {/* MOBILE DRAWER (logo + nama/jabatan sejajar di bar atas) */}
+      <aside
+        role="dialog"
+        aria-modal="true"
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r sidebar-dark bg-slate-900 text-white shadow-lg transform transition-transform duration-300 md:hidden ${
+          isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {/* Tombol close di dalam drawer (pojok kanan atas) */}
+        <button
+          type="button"
+          aria-label="Tutup navigasi"
+          title="Tutup navigasi"
+          onClick={() => setIsMobileNavOpen(false)}
+          className="absolute right-2 top-2 rounded-md border border-white/20 bg-white/5 p-2 hover:bg-white/10"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        <NavContent collapsed={false} />
+      </aside>
     </>
   );
 }

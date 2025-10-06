@@ -4,6 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Sidebar collapse helpers ===== */
+aside[data-collapsed="true"] .sb-when-expanded { display: none !important; }
+aside[data-collapsed="false"] .sb-when-collapsed { display: none !important; }
+
 /* Base */
 @layer base {
   html, body {
