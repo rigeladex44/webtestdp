@@ -15,7 +15,8 @@ import ForgotPasswordPage from '@/pages/ForgotPasswordPage.jsx';
 import DashboardClassic from '@/pages/DashboardClassic.jsx';
 import CashflowMini from '@/pages/CashflowMini.jsx';
 import ProfitLoss from '@/pages/ProfitLoss.jsx';
-import SalesEntryPage from '@/pages/SalesEntryPage.jsx'; // <-- IMPORT BARU
+import SalesEntryPage from '@/pages/SalesEntryPage.jsx';
+import OtherIncomePage from '@/pages/OtherIncomePage.jsx'; // <— BARU
 
 import MailPage from '@/pages/apps/MailPage.jsx';
 import ChatPage from '@/pages/apps/ChatPage.jsx';
@@ -103,10 +104,8 @@ export default function App() {
           <Route path="dashboard" element={<DashboardClassic />} />
           <Route path="arus-kas-kecil" element={<CashflowMini />} />
           <Route path="laba-rugi" element={<ProfitLoss />} />
-          
-          {/* --- RUTE BARU DITAMBAHKAN DI SINI --- */}
           <Route path="entri-penjualan" element={<SalesEntryPage />} />
-          {/* ------------------------------------ */}
+          <Route path="pendapatan-lain" element={<OtherIncomePage />} /> {/* BARU */}
 
           <Route path="apps/mail" element={<MailPage />} />
           <Route path="apps/chat" element={<ChatPage />} />

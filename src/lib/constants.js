@@ -8,13 +8,13 @@ export const PT_LIST = [
   { tag: 'KBS', fullName: 'PT KHABITSA INDOGAS' },
 ];
 
-// --- TAMBAHKAN KODE DI BAWAH INI ---
+// ——— KATEGORI (lengkap) ———
 export const CATEGORY_LIST = [
   // PENDAPATAN
   { name: 'Penjualan Gas LPG 3Kg', type: 'Masuk' },
   { name: 'Pendapatan Lain - Lain', type: 'Masuk' },
   { name: 'Transport Fee', type: 'Masuk' },
-  
+
   // BIAYA & BEBAN
   { name: 'HPP Gas LPG 3Kg', type: 'Keluar' },
   { name: 'Beban Gaji Karyawan', type: 'Keluar' },
@@ -29,6 +29,9 @@ export const CATEGORY_LIST = [
   { name: 'Pengeluaran Lain-lain', type: 'Keluar' },
   { name: 'Pengeluaran Kasbon', type: 'Keluar' },
   { name: 'Biaya Operasional', type: 'Keluar' },
-  { name: 'ATK', type: 'Keluar' }, // Kategori lama tetap dimasukkan
-  { name: 'Umum', type: 'Keluar' }, // Kategori lama tetap dimasukkan
+  { name: 'ATK', type: 'Keluar' },
+  { name: 'Umum', type: 'Keluar' },
+
+  // Tambahan untuk auto-potong pajak pendapatan lain-lain
+  { name: 'Pajak Pendapatan', type: 'Keluar' },
 ];

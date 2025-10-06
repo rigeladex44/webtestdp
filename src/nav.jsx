@@ -61,7 +61,16 @@ export const UserPlusIcon = ({ className }) => (
   </IconBase>
 );
 
-// --- IKON BARU ---
+// ——— IKON BARU: Coins ———
+export const CoinsIcon = ({ className }) => (
+  <IconBase className={className}>
+    <circle cx="8" cy="8" r="3" />
+    <circle cx="16" cy="12" r="3" />
+    <path d="M5 8h6M13 12h6" />
+  </IconBase>
+);
+
+// ——— IKON Entri Penjualan (sebelumnya sudah) ———
 export const ShoppingCartIcon = ({ className }) => (
   <IconBase className={className}>
     <circle cx="9" cy="21" r="1" />
@@ -69,7 +78,6 @@ export const ShoppingCartIcon = ({ className }) => (
     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
   </IconBase>
 );
-// -----------------
 
 /* ===== NAV dengan role ===== */
 export const NAV = [
@@ -78,10 +86,9 @@ export const NAV = [
     children: [
       { label: 'Beranda Utama',   path: '/dashboard',        icon: HomeIcon,         roles: ['kasir','keuangan'] },
       { label: 'Arus Kas Kecil',  path: '/arus-kas-kecil',   icon: WalletIcon,       roles: ['kasir','keuangan'] },
-      // --- MENU BARU ---
-      { label: 'Entri Penjualan', path: '/entri-penjualan',  icon: ShoppingCartIcon, roles: ['kasir', 'keuangan'] },
-      // -------------------
-      { label: 'Laba Rugi',       path: '/laba-rugi',        icon: BarChartIcon,     roles: ['keuangan', 'direktur', 'admin'] }, // <-- Ditambahkan role direktur & admin
+      { label: 'Entri Penjualan', path: '/entri-penjualan',  icon: ShoppingCartIcon, roles: ['kasir','keuangan'] },
+      { label: 'Pendapatan Lain-lain', path: '/pendapatan-lain', icon: CoinsIcon, roles: ['kasir','keuangan'] },
+      { label: 'Laba Rugi',       path: '/laba-rugi',        icon: BarChartIcon,     roles: ['keuangan','direktur','admin'] },
     ],
   },
   {
