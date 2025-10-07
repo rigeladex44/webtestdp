@@ -10,6 +10,7 @@ import { fmtIDR } from '@/lib/utils.js';
 import { useToast } from '@/components/use-toast.js';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getAllowedPTsForUser } from '@/lib/pt-access.js';
 
 const todayISO = new Date().toISOString().slice(0, 10);
 const todayLabel = new Intl.DateTimeFormat('id-ID', {
@@ -38,23 +39,24 @@ export default function CashflowMini() {
   const { toast } = useToast();
   const kasir = getKasirName();
   const me = useMemo(() => getCurrentUser(), []);
-  const isDirector = me?.role === 'direktur';
+  const allowedPTs = getAllowedPTsForUser(me);
+  const isSinglePT = allowedPTs.length === 1;
 
   const [ptFilter, setPtFilter] = useState(() =>
-    isDirector ? [me.pt] : PT_LIST.map(p => p.fullName)
+    allowedPTs.length ? allowedPTs : PT_LIST.map(p => p.fullName)
   );
   const makeEmpty = () => ({
-    date: todayISO, pt: isDirector ? me.pt : PT_LIST[0].fullName,
+    date: todayISO, pt: (isSinglePT ? allowedPTs[0] : PT_LIST[0].fullName),
     desc: '', category: 'Umum', type: 'Keluar', amount: '',
   });
   const [form, setForm] = useState(makeEmpty());
 
   useEffect(() => {
-    if (isDirector) {
-      setPtFilter([me.pt]);
-      setForm(f => ({ ...f, pt: me.pt }));
+    if (allowedPTs.length) {
+      setPtFilter(allowedPTs);
+      setForm(f => ({ ...f, pt: isSinglePT ? allowedPTs[0] : f.pt }));
     }
-  }, [isDirector, me]);
+  }, [allowedPTs, isSinglePT]);
 
   const [editId, setEditId] = useState(null);
   const [editRow, setEditRow] = useState(null);
@@ -65,20 +67,15 @@ export default function CashflowMini() {
       .filter((t) => t.date === todayISO)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
 
-    const byPT = (t) => {
-      if (isDirector) return (t.pt || '') === me.pt;
-      if (ptFilter.length === 0) return false;
-      return ptFilter.includes(t.pt || '');
-    };
-
-    // KUNCI: hanya transaksi yang mempengaruhi kas kecil
+    const byPT = (t) => ptFilter.length && ptFilter.includes(t.pt || '');
+    // hanya transaksi yang mempengaruhi kas kecil
     const rows = base.filter(byPT).filter((t) => t.affectsCash === true);
 
     const inCash  = rows.filter((t) => isInType(t.type)).reduce((s, t) => s + t.amount, 0);
     const outCash = rows.filter((t) => isOutType(t.type)).reduce((s, t) => s + t.amount, 0);
 
     return { inCash, outCash, saldo: inCash - outCash, list: rows };
-  }, [transactions, ptFilter, isDirector, me]);
+  }, [transactions, ptFilter]);
 
   const onSubmit = (e) => {
     e.preventDefault();
@@ -111,7 +108,7 @@ export default function CashflowMini() {
     setEditRow({
       ...row,
       amount: String(row.amount),
-      pt: row.pt || (isDirector ? me.pt : PT_LIST[0].fullName),
+      pt: row.pt || (isSinglePT ? allowedPTs[0] : PT_LIST[0].fullName),
     });
   };
   const cancelEdit = () => { setEditId(null); setEditRow(null); };
@@ -181,7 +178,9 @@ export default function CashflowMini() {
     doc.text('LAPORAN KAS KECIL', pageWidth / 2, margin, { align: 'center' });
 
     doc.setFontSize(10); doc.setFont(undefined, 'normal');
-    const ptTitle = isDirector ? me.pt : (ptFilter.length === PT_LIST.length ? 'SEMUA PERUSAHAAN' : ptFilter.join(' - '));
+    const ptTitle = (ptFilter.length === PT_LIST.length || ptFilter.length === allowedPTs.length)
+      ? 'SEMUA PERUSAHAAN'
+      : ptFilter.join(' - ');
     doc.text(ptTitle, pageWidth / 2, margin + 12, { align: 'center' });
 
     autoTable(doc, {
@@ -245,16 +244,21 @@ export default function CashflowMini() {
             Kasir: <span className="font-medium text-foreground">{kasir}</span>
           </div>
         </div>
-        {isDirector ? (
+
+        {isSinglePT ? (
           <div>
             <label className="text-sm block">PT</label>
-            <div className="mt-1 h-10 w-full min-w-[150px] rounded-md border bg-background/50 px-3 text-sm flex items-center">
-              {PT_LIST.find(p => p.fullName === me.pt)?.tag || me.pt}
+            <div className="mt-1 h-10 min-w-[150px] rounded-md border bg-background/50 px-3 text-sm flex items-center">
+              {PT_LIST.find(p => p.fullName === allowedPTs[0])?.tag || allowedPTs[0]}
             </div>
           </div>
         ) : (
-          <PtMultiSelectFilter selectedPts={ptFilter} onChange={setPtFilter} />
+          <PtMultiSelectFilter
+            selectedPts={ptFilter}
+            onChange={(v)=>setPtFilter(v.filter(x=>allowedPTs.includes(x)))}
+          />
         )}
+
         <div className="flex gap-2">
           <Button type="button" onClick={exportCSV}>Export CSV</Button>
           <Button type="button" onClick={exportPDF}>Export PDF</Button>
@@ -274,8 +278,16 @@ export default function CashflowMini() {
         </div>
         <div>
           <label className="text-sm block">PT</label>
-          <select className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-75" value={form.pt} onChange={(e) => setForm({ ...form, pt: e.target.value })} disabled={isDirector}>
-            {PT_LIST.map(pt => <option key={pt.tag} value={pt.fullName}>{pt.tag}</option>)}
+          <select
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-75"
+            value={form.pt}
+            onChange={(e) => setForm({ ...form, pt: e.target.value })}
+            disabled={isSinglePT}
+          >
+            {(allowedPTs.length ? allowedPTs : PT_LIST.map(p => p.fullName)).map(ptFull => {
+              const pt = PT_LIST.find(p => p.fullName === ptFull) || { tag: ptFull };
+              return <option key={ptFull} value={ptFull}>{pt.tag}</option>;
+            })}
           </select>
         </div>
         <div className="md:col-span-2">
@@ -310,7 +322,11 @@ export default function CashflowMini() {
         </div>
         <div className="md:col-span-7 flex gap-2">
           <Button type="submit">Tambah</Button>
-          <Button type="button" className="bg-gray-300 text-gray-900 border border-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600" onClick={() => setForm(makeEmpty())}>
+          <Button
+            type="button"
+            className="bg-gray-300 text-gray-900 border border-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600"
+            onClick={() => setForm(makeEmpty())}
+          >
             Reset
           </Button>
         </div>
@@ -335,8 +351,16 @@ export default function CashflowMini() {
                     <td className="py-2">{t.date}</td>
                     <td>
                       {isEditing ? (
-                        <select className="h-8 w-full rounded-md border bg-background px-2 text-sm disabled:opacity-75" value={editRow.pt} onChange={(e) => setEditRow({ ...editRow, pt: e.target.value })} disabled={isDirector}>
-                          {PT_LIST.map(pt => <option key={pt.tag} value={pt.fullName}>{pt.tag}</option>)}
+                        <select
+                          className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+                          value={editRow.pt}
+                          onChange={(e) => setEditRow({ ...editRow, pt: e.target.value })}
+                          disabled={isSinglePT}
+                        >
+                          {(allowedPTs.length ? allowedPTs : PT_LIST.map(p => p.fullName)).map(ptFull => {
+                            const pt = PT_LIST.find(p => p.fullName === ptFull) || { tag: ptFull };
+                            return <option key={ptFull} value={ptFull}>{pt.tag}</option>;
+                          })}
                         </select>
                       ) : (PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt || '-')}
                     </td>

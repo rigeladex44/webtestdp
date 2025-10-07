@@ -9,14 +9,12 @@ import { PT_LIST } from '@/lib/constants.js';
 import { fmtIDR } from '@/lib/utils.js';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getAllowedPTsForUser } from '@/lib/pt-access.js';
 
 const todayISO = new Date().toISOString().slice(0, 10);
 
 // helpers
-const isInType  = (t) => ['Masuk', 'income', 'Debit'].includes(String(t || '').trim());
-const isOutType = (t) => ['Keluar', 'expense', 'Kredit'].includes(String(t || '').trim());
 const sum = (arr, sel) => arr.reduce((s, x) => s + sel(x), 0);
-
 function groupByCategory(rows) {
   const map = new Map();
   for (const r of rows) {
@@ -35,20 +33,21 @@ const fmtRangeLabel = (a, b) => {
 export default function ProfitLossPage() {
   const { transactions } = useTransactions();
   const me = useMemo(() => getCurrentUser(), []);
-  const isDirector = me?.role === 'direktur';
+  const allowedPTs = getAllowedPTsForUser(me);
+  const isSinglePT = allowedPTs.length === 1;
 
   const [ptFilter, setPtFilter] = useState(() =>
-    isDirector ? [me.pt] : PT_LIST.map(p => p.fullName)
+    allowedPTs.length ? allowedPTs : PT_LIST.map(p => p.fullName)
   );
 
   const [fromDate, setFromDate] = useState(todayISO);
   const [toDate, setToDate] = useState(todayISO);
 
   useEffect(() => {
-    if (isDirector) {
-      setPtFilter([me.pt]);
+    if (allowedPTs.length) {
+      setPtFilter(allowedPTs);
     }
-  }, [isDirector, me]);
+  }, [allowedPTs]);
 
   const handleFrom = (v) => { if (!v) return; setFromDate(v <= toDate ? v : toDate); };
   const handleTo   = (v) => { if (!v) return; setToDate(v >= fromDate ? v : fromDate); };
@@ -57,27 +56,22 @@ export default function ProfitLossPage() {
 
   const { rows, incomeTotal, expenseTotal, netTotal, incomeByCat, expenseByCat } = useMemo(() => {
     const within = (d) => d >= fromDate && d <= toDate;
-    const byPT = (t) => {
-      if (isDirector) return (t.pt || '') === me.pt;
-      if (ptFilter.length === 0) return false;
-      return ptFilter.includes(t.pt || '');
-    };
+    const byPT = (t) => ptFilter.length && ptFilter.includes(t.pt || '');
     const base = transactions.filter(t => within(t.date) && byPT(t));
     const rows = [...base].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
 
-    // fleksibel tipe
-    const income  = rows.filter(t => isInType(t.type));
-    const expense = rows.filter(t => isOutType(t.type));
+    const income = rows.filter(t => t.type === 'Masuk' || t.type === 'income' || t.type === 'Debit');
+    const expense = rows.filter(t => t.type === 'Keluar' || t.type === 'expense' || t.type === 'Kredit');
 
-    const incomeTotal  = sum(income,  x => x.amount);
+    const incomeTotal = sum(income, x => x.amount);
     const expenseTotal = sum(expense, x => x.amount);
     const netTotal = incomeTotal - expenseTotal;
 
-    const incomeByCat  = groupByCategory(income);
+    const incomeByCat = groupByCategory(income);
     const expenseByCat = groupByCategory(expense);
 
     return { rows, incomeTotal, expenseTotal, netTotal, incomeByCat, expenseByCat };
-  }, [transactions, ptFilter, fromDate, toDate, isDirector, me]);
+  }, [transactions, ptFilter, fromDate, toDate]);
 
   const exportCSV = () => {
     const header = ['Tanggal', 'PT', 'Kategori', 'Diinput Oleh', 'Tipe', 'Deskripsi', 'Jumlah (Rp)'];
@@ -86,7 +80,7 @@ export default function ProfitLossPage() {
       PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt || '',
       t.category || '',
       t.operator || '',
-      isInType(t.type) ? 'Masuk' : 'Keluar',
+      t.type,
       t.desc || '',
       t.amount.toString(),
     ]);
@@ -114,7 +108,9 @@ export default function ProfitLossPage() {
     doc.text('LAPORAN LABA RUGI', pageWidth / 2, margin, { align: 'center' });
 
     doc.setFontSize(10); doc.setFont(undefined, 'normal');
-    const ptTitle = isDirector ? me.pt : (ptFilter.length === PT_LIST.length ? 'SEMUA PERUSAHAAN' : ptFilter.join(' - '));
+    const ptTitle = (ptFilter.length === PT_LIST.length || ptFilter.length === allowedPTs.length)
+      ? 'SEMUA PERUSAHAAN'
+      : ptFilter.join(' - ');
     doc.text(ptTitle, pageWidth / 2, margin + 12, { align: 'center' });
     doc.text(`Periode: ${periodLabel}`, pageWidth / 2, margin + 24, { align: 'center' });
 
@@ -133,15 +129,7 @@ export default function ProfitLossPage() {
 
     const tableBody = rows.map(t => {
       const ptTag = PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt;
-      return [
-        t.date,
-        ptTag,
-        t.desc,
-        t.category,
-        t.operator,
-        isInType(t.type) ? 'Masuk' : 'Keluar',
-        { content: fmtIDR(t.amount), styles: { halign: 'right' } }
-      ];
+      return [t.date, ptTag, t.desc, t.category, t.operator, t.type, { content: fmtIDR(t.amount), styles: { halign: 'right' } }];
     });
 
     autoTable(doc, {
@@ -176,18 +164,24 @@ export default function ProfitLossPage() {
               <div>Periode: <span className="font-medium text-foreground">{periodLabel}</span></div>
             </div>
           </div>
-          {isDirector ? (
+
+          {isSinglePT ? (
             <div>
               <label className="text-sm block">PT</label>
-              <div className="mt-1 h-10 w-full min-w-[150px] rounded-md border bg-background/50 px-3 text-sm flex items-center">
-                {PT_LIST.find(p => p.fullName === me.pt)?.tag || me.pt}
+              <div className="mt-1 h-10 min-w-[150px] rounded-md border bg-background/50 px-3 text-sm flex items-center">
+                {PT_LIST.find(p => p.fullName === allowedPTs[0])?.tag || allowedPTs[0]}
               </div>
             </div>
           ) : (
-            <PtMultiSelectFilter selectedPts={ptFilter} onChange={setPtFilter} />
+            <PtMultiSelectFilter
+              selectedPts={ptFilter}
+              onChange={(v)=>setPtFilter(v.filter(x=>allowedPTs.includes(x)))}
+            />
           )}
+
           <DatePicker label="Tanggal Awal" value={fromDate} onChange={handleFrom} max={toDate} />
           <DatePicker label="Tanggal Akhir" value={toDate} onChange={handleTo} min={fromDate} />
+
           <div className="flex gap-2">
             <Button type="button" onClick={exportCSV}>Export CSV</Button>
             <Button type="button" onClick={exportPDF}>Export PDF</Button>
@@ -234,8 +228,8 @@ export default function ProfitLossPage() {
                   <td>{PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt || '-'}</td>
                   <td>{t.category || '-'}</td>
                   <td>{t.operator || '-'}</td>
-                  <td className={isInType(t.type) ? 'text-green-600' : 'text-red-500'}>
-                    {isInType(t.type) ? 'Masuk' : 'Keluar'}
+                  <td className={t.type === 'Masuk' || t.type === 'income' || t.type === 'Debit' ? 'text-green-600' : 'text-red-500'}>
+                    {t.type}
                   </td>
                   <td>{t.desc || '-'}</td>
                   <td className="text-right">{fmtIDR(t.amount)}</td>

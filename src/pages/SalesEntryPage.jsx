@@ -94,15 +94,19 @@ export default function SalesEntryPage() {
       // deskripsi
       desc: `Penebusan ${selectedProduct.name} x ${qty}` + (buyerName ? ` - ${buyerName}` : ''),
       category: 'Penjualan',
-      type: 'income',
-      amount: total,                // total transaksi (sesuai mode include/exclude)
+      type: 'Masuk',               // <-- penting: konsisten dengan Laba Rugi & Kas Kecil
+      amount: total,               // total transaksi (sesuai mode include/exclude)
       buyer: buyerName,
       paymentMethod: pay,
       createdAt: Date.now(),
+
       // metadata bisnis
       actorType: 'pangkalan',
       kind: 'penebusan',
+
+      // KUNCI: hanya Tunai yang memengaruhi Kas Kecil
       affectsCash: isCash,
+
       // pajak (editable)
       dpp,                 // Dasar Pengenaan Pajak
       ppn11: ppn,          // hutang PPN (rate sesuai input)
@@ -113,7 +117,7 @@ export default function SalesEntryPage() {
 
     toast({
       title: 'Penjualan Berhasil Disimpan',
-      description: `${fmtIDR(total)} dicatat ke Laba Rugi` + (isCash ? ' & Kas Kecil.' : '.'),
+      description: `${fmtIDR(total)} dicatat ke Laba Rugi${isCash ? ' & Kas Kecil.' : ' (non-tunai; tidak ke Kas Kecil).'}`,
     });
 
     // reset minimal
@@ -282,7 +286,10 @@ export default function SalesEntryPage() {
                   <td>{PT_LIST.find(p => p.fullName === t.pt)?.tag || t.pt}</td>
                   <td>{t.desc}</td>
                   <td>{t.buyer || '-'}</td>
-                  <td>{t.paymentMethod}</td>
+                  <td>
+                    {t.paymentMethod}
+                    {t.affectsCash === false ? <span className="ml-1 text-xs text-amber-600">(non-tunai)</span> : null}
+                  </td>
                   <td className="text-right">{fmtIDR(t.dpp ?? 0)}</td>
                   <td className="text-right">{fmtIDR(t.ppn11 ?? 0)}</td>
                   <td className="text-right text-green-500 font-medium">{fmtIDR(t.amount)}</td>
