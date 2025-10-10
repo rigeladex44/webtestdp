@@ -54,17 +54,15 @@ import SparklinePage from "@/pages/charts/SparklinePage.jsx";
 import { Toaster } from "@/components/ui/toaster.jsx";
 import { TransactionsProvider } from "@/context/TransactionsContext.jsx";
 
-// Admin area
-import RequireRole from "@/routes/RequireRole.jsx";
 import AdminLayout from "@/layouts/AdminLayout.jsx";
 import AdminHomePage from "@/pages/admin/AdminHomePage.jsx";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage.jsx";
 import AdminAuditLogPage from "@/pages/admin/AdminAuditLogPage.jsx";
 
-// Feature-gate
 import RequireFeature from "@/routes/RequireFeature.jsx";
 import { ensureDefaultFeatures, FEATURES } from "@/lib/features.js";
 import { ensureDefaultPTAccess } from "@/lib/pt-access.js";
+import { ensureMaster } from "@/lib/adminStore.js";
 
 const AUTH_KEY = "isAuthenticated";
 const isAuthed = () => localStorage.getItem(AUTH_KEY) === "true";
@@ -74,8 +72,14 @@ function ScrollToTop() {
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return null;
 }
-function PrivateRoute({ children }) { return isAuthed() ? children : <Navigate to="/login" replace />; }
-function PublicRoute({ children }) { return isAuthed() ? <Navigate to="/dashboard" replace /> : children; }
+
+function PrivateRoute({ children }) {
+  return isAuthed() ? children : <Navigate to="/login" replace />;
+}
+
+function PublicRoute({ children }) {
+  return isAuthed() ? <Navigate to="/dashboard" replace /> : children;
+}
 
 function NotFound() {
   return (
@@ -90,22 +94,25 @@ function NotFound() {
 }
 
 export default function App() {
-  // Master user (keu) -> semua fitur & semua PT default ON
   useEffect(() => {
     ensureDefaultFeatures();
-    ensureDefaultPTAccess();
+    ensureDefaultPTAccess?.();
+    ensureMaster();
   }, []);
 
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true
+      }}
+    >
       <ScrollToTop />
       <Routes>
-        {/* Public */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
 
-        {/* App utama */}
         <Route
           path="/"
           element={
@@ -121,7 +128,7 @@ export default function App() {
           <Route
             path="dashboard"
             element={
-              <RequireFeature feature={FEATURES.DASHBOARD}>
+              <RequireFeature feature={FEATURES.DASHBOARD_VIEW}>
                 <DashboardClassic />
               </RequireFeature>
             }
@@ -129,7 +136,7 @@ export default function App() {
           <Route
             path="arus-kas-kecil"
             element={
-              <RequireFeature feature={FEATURES.CASH_SMALL}>
+              <RequireFeature feature={FEATURES.CASHFLOW_VIEW}>
                 <CashflowMini />
               </RequireFeature>
             }
@@ -151,7 +158,6 @@ export default function App() {
             }
           />
 
-          {/* Halaman contoh lain (tanpa gate khusus) */}
           <Route path="apps/mail" element={<MailPage />} />
           <Route path="apps/chat" element={<ChatPage />} />
           <Route path="apps/faq" element={<FAQPage />} />
@@ -185,13 +191,15 @@ export default function App() {
           <Route path="change-password" element={<ChangePasswordPage />} />
         </Route>
 
-        {/* Admin */}
+        {/* ADMIN - Feature-based Access */}
         <Route
           path="/admin/*"
           element={
-            <RequireRole role="admin">
-              <AdminLayout />
-            </RequireRole>
+            <PrivateRoute>
+              <RequireFeature feature={FEATURES.ADMIN_PANEL}>
+                <AdminLayout />
+              </RequireFeature>
+            </PrivateRoute>
           }
         >
           <Route index element={<AdminHomePage />} />

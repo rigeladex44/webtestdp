@@ -1,33 +1,111 @@
-// src/pages/admin/AdminAuditPage.jsx
-import React, { useMemo, useState } from 'react';
-import { listAdminLogs, clearAdminLogs } from '@/lib/auth.js';
+// src/pages/admin/AdminAuditLogPage.jsx
+import React, { useMemo, useState } from "react";
+import { getAuditLogs as getAdminAudit } from "@/lib/adminStore.js";
 
-export default function AdminAuditPage() {
-  const [tick, setTick] = useState(0);
-  const logs = useMemo(() => listAdminLogs(500), [tick]);
+const AUDIT_KEY = "admin:audit";
 
-  const onClear = () => {
-    if (!confirm('Hapus semua log?')) return;
-    clearAdminLogs();
-    setTick(t => t + 1);
-  };
+function fmtDT(ts) {
+  if (!ts) return "-";
+  try {
+    return new Date(ts).toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return String(ts);
+  }
+}
 
-  const onExport = () => {
-    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
+function prettyDetail(action, detail) {
+  if (!detail) return "-";
+  const d = detail || {};
+  switch (action) {
+    case "create_user":
+      return `Buat user: ${d.username || "-"} (id: ${d.id || "-"})`;
+    case "update_user":
+      return `Ubah user: ${d.username || "-"} (id: ${d.id || "-"})`;
+    case "delete_user":
+      return `Hapus user: ${d.username || "-"} (id: ${d.id || "-"})`;
+    case "seed_keu":
+      return "Seeder: akun master keu dibuat";
+    default:
+      // fallback: stringify rapi
+      try {
+        return JSON.stringify(d);
+      } catch {
+        return String(d);
+      }
+  }
+}
+
+export default function AdminAuditLogPage() {
+  const [logs, setLogs] = useState(() => (getAdminAudit() || []).sort((a, b) => (b.ts || 0) - (a.ts || 0)));
+  const [q, setQ] = useState("");
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return logs;
+    return logs.filter((l) => {
+      const a = (l.action || "").toLowerCase();
+      let d = "";
+      try {
+        d = JSON.stringify(l.detail || {}).toLowerCase();
+      } catch {}
+      return a.includes(term) || d.includes(term);
+    });
+  }, [logs, q]);
+
+  const exportCSV = () => {
+    const header = ["ID", "Waktu", "Aksi", "Detail"];
+    const rows = filtered.map((l) => [
+      l.id || "",
+      fmtDT(l.ts),
+      l.action || "",
+      prettyDetail(l.action, l.detail || {}),
+    ]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `audit_logs_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = "admin_audit_logs.csv";
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
+  const clearAll = () => {
+    if (!confirm("Hapus semua log audit admin?")) return;
+    try {
+      localStorage.setItem(AUDIT_KEY, "[]");
+      setLogs([]);
+    } catch {
+      // noop
+    }
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <h2 className="text-2xl font-semibold">Audit Log</h2>
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <h2 className="text-2xl font-semibold">Audit Admin</h2>
         <div className="ml-auto flex items-center gap-2">
-          <button className="text-sm rounded-md border px-2 py-1 hover:bg-muted/60" onClick={onExport}>Export JSON</button>
-          <button className="text-sm rounded-md border px-2 py-1 hover:bg-muted/60" onClick={onClear}>Clear</button>
+          <input
+            className="h-9 w-56 rounded-md border bg-background px-3 text-sm"
+            placeholder="Cari aksi / detail…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <button onClick={exportCSV} className="text-sm rounded-md border px-2 py-1 hover:bg-muted/60">
+            Export CSV
+          </button>
+          <button onClick={clearAll} className="text-sm rounded-md border px-2 py-1 hover:bg-red-50 dark:hover:bg-red-900/20">
+            Hapus Semua
+          </button>
         </div>
       </div>
 
@@ -36,29 +114,38 @@ export default function AdminAuditPage() {
           <thead className="text-left text-muted-foreground">
             <tr>
               <th className="py-2">Waktu</th>
-              <th>Aktor</th>
               <th>Aksi</th>
-              <th>Target</th>
               <th>Detail</th>
+              <th className="text-right">ID</th>
             </tr>
           </thead>
           <tbody>
-            {logs.map(l => (
+            {filtered.map((l) => (
               <tr key={l.id} className="border-t align-top">
-                <td className="py-2">{new Date(l.ts).toLocaleString('id-ID')}</td>
-                <td>{l.actor || '-'}</td>
-                <td>{l.action}</td>
-                <td>{l.target || '-'}</td>
-                <td className="font-mono text-xs break-all whitespace-pre-wrap">
-                  {l.meta ? JSON.stringify(l.meta) : '-'}
+                <td className="py-2 whitespace-nowrap">{fmtDT(l.ts)}</td>
+                <td className="whitespace-nowrap">
+                  <span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs">
+                    {l.action}
+                  </span>
                 </td>
+                <td className="min-w-[320px]">{prettyDetail(l.action, l.detail)}</td>
+                <td className="text-right text-xs text-muted-foreground">{l.id}</td>
               </tr>
             ))}
-            {logs.length === 0 && (
-              <tr><td colSpan={5} className="py-4 text-muted-foreground">Belum ada log.</td></tr>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                  Tidak ada log untuk ditampilkan.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ringkas jumlah log */}
+      <div className="text-xs text-muted-foreground">
+        Menampilkan {filtered.length} dari {logs.length} log.
       </div>
     </div>
   );

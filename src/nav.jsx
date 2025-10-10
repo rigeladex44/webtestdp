@@ -1,6 +1,6 @@
 // src/nav.jsx
-import React from 'react';
-import { FEATURES } from '@/lib/features.js';
+import React from "react";
+import { FEATURES } from "@/lib/features.js";
 
 /* ===== util ikon ===== */
 function IconBase({ className, children }) {
@@ -77,7 +77,7 @@ export const CoinsIcon = ({ className }) => (
   </IconBase>
 );
 
-// Shopping cart
+// Cart
 export const ShoppingCartIcon = ({ className }) => (
   <IconBase className={className}>
     <circle cx="9" cy="21" r="1" />
@@ -86,101 +86,72 @@ export const ShoppingCartIcon = ({ className }) => (
   </IconBase>
 );
 
-// Bell (untuk menu Approval direktur)
-export const BellIcon = ({ className }) => (
-  <IconBase className={className}>
-    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h16" />
-    <path d="M10 21a2 2 0 0 0 4 0" />
-  </IconBase>
-);
-
-/* ===== NAV pakai FEATURE FLAGS per user =====
-   Setiap item punya `feature` yg dicek oleh Sidebar / RequireFeature.
-*/
+/* ===== NAV pakai FEATURE FLAGS per user ===== */
 export const NAV = [
   {
-    group: 'Dashboard',
+    group: "Dashboard",
     children: [
       {
-        label: 'Beranda Utama',
-        path: '/dashboard',
+        label: "Beranda Utama",
+        path: "/dashboard",
         icon: HomeIcon,
         feature: FEATURES.DASHBOARD_VIEW,
       },
       {
-        label: 'Arus Kas Kecil',
-        path: '/arus-kas-kecil',
+        label: "Arus Kas Kecil",
+        path: "/arus-kas-kecil",
         icon: WalletIcon,
         feature: FEATURES.CASHFLOW_VIEW,
       },
       {
-        label: 'Entri Penjualan',
-        path: '/entri-penjualan',
+        label: "Entri Penjualan",
+        path: "/entri-penjualan",
         icon: ShoppingCartIcon,
         feature: FEATURES.SALES_ENTRY,
       },
       {
-        label: 'Pendapatan Lain-lain',
-        path: '/pendapatan-lain',
+        label: "Pendapatan Lain-lain",
+        path: "/pendapatan-lain",
         icon: CoinsIcon,
         feature: FEATURES.OTHER_INCOME,
       },
       {
-        label: 'Laba Rugi',
-        path: '/laba-rugi',
+        label: "Laba Rugi",
+        path: "/laba-rugi",
         icon: BarChartIcon,
         feature: FEATURES.PNL_VIEW,
       },
     ],
   },
 
-  // ===== Seksi khusus Direktur (pakai flags DIRECTOR_*) =====
   {
-    group: 'Direktur',
+    group: "Report Kas Kecil",
     children: [
-      {
-        label: 'Approval',
-        // sementara diarahkan ke arus-kas-kecil (pending terlihat disini)
-        path: '/arus-kas-kecil',
-        icon: BellIcon,
-        feature: FEATURES.DIRECTOR_APPROVAL,
-      },
-      {
-        label: 'Detail Kas Kecil',
-        path: '/arus-kas-kecil',
-        icon: WalletIcon,
-        feature: FEATURES.DIRECTOR_CASHFLOW_RO,
-      },
-      {
-        label: 'Detail Laba Rugi',
-        path: '/laba-rugi',
-        icon: BarChartIcon,
-        feature: FEATURES.DIRECTOR_PNL_RO,
-      },
+      { label: "SJE", path: "/report/kas-kecil/sje", icon: WalletIcon, feature: FEATURES.REPORT_CASH_SJE },
+      { label: "KSS", path: "/report/kas-kecil/kss", icon: WalletIcon, feature: FEATURES.REPORT_CASH_KSS },
+      { label: "FAB", path: "/report/kas-kecil/fab", icon: WalletIcon, feature: FEATURES.REPORT_CASH_FAB },
+      { label: "SJS", path: "/report/kas-kecil/sjs", icon: WalletIcon, feature: FEATURES.REPORT_CASH_SJS },
+      { label: "KBS", path: "/report/kas-kecil/kbs", icon: WalletIcon, feature: FEATURES.REPORT_CASH_KBS },
     ],
   },
 
   {
-    group: 'Admin',
+    group: "Report Laba Rugi",
     children: [
-      {
-        label: 'Panel Admin',
-        path: '/admin',
-        icon: UserIcon,
-        feature: FEATURES.ADMIN_PANEL,
-      },
-      {
-        label: 'Kelola Users',
-        path: '/admin/users',
-        icon: UserPlusIcon,
-        feature: FEATURES.ADMIN_USERS,
-      },
-      {
-        label: 'Audit Log',
-        path: '/admin/audit',
-        icon: ActivityIcon,
-        feature: FEATURES.ADMIN_AUDIT,
-      },
+      { label: "SJE", path: "/report/laba-rugi/sje", icon: BarChartIcon, feature: FEATURES.REPORT_PNL_SJE },
+      { label: "KSS", path: "/report/laba-rugi/kss", icon: BarChartIcon, feature: FEATURES.REPORT_PNL_KSS },
+      { label: "FAB", path: "/report/laba-rugi/fab", icon: BarChartIcon, feature: FEATURES.REPORT_PNL_FAB },
+      { label: "SJS", path: "/report/laba-rugi/sjs", icon: BarChartIcon, feature: FEATURES.REPORT_PNL_SJS },
+      { label: "KBS", path: "/report/laba-rugi/kbs", icon: BarChartIcon, feature: FEATURES.REPORT_PNL_KBS },
+    ],
+  },
+
+  {
+    group: "Admin",
+    children: [
+      { label: "Panel Admin",  path: "/admin",       icon: UserIcon,     feature: FEATURES.ADMIN_PANEL },
+      { label: "Kelola Users", path: "/admin/users", icon: UserPlusIcon, feature: FEATURES.ADMIN_USERS },
+      { label: "Audit Log",    path: "/admin/audit", icon: ActivityIcon, feature: FEATURES.ADMIN_AUDIT },
     ],
   },
 ];

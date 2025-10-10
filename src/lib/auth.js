@@ -1,11 +1,10 @@
 // src/lib/auth.js
 import { Audit } from '@/lib/audit.js';
 
-export const AUTH_KEY  = 'isAuthenticated'; // session flag
-export const AUTH_USER = 'auth:user';       // user yang sedang login (session)
-export const USERS_KEY = 'auth:users';      // daftar semua user (admin kelola)
+export const AUTH_KEY  = 'isAuthenticated';
+export const AUTH_USER = 'auth:user';
+export const USERS_KEY = 'auth:users';
 
-// ===== util =====
 function uuid() {
   const c = globalThis.crypto;
   return c && typeof c.randomUUID === 'function'
@@ -13,7 +12,6 @@ function uuid() {
     : String(Date.now()) + Math.random().toString(16).slice(2);
 }
 
-// ===== storage helpers =====
 function readUsers() {
   try {
     const raw = localStorage.getItem(USERS_KEY);
@@ -29,7 +27,6 @@ function upsertCurrentUser(u) {
   localStorage.setItem(AUTH_USER, JSON.stringify(u));
 }
 
-// ===== session helpers =====
 export function getCurrentUser() {
   try {
     const raw = localStorage.getItem(AUTH_USER);
@@ -42,26 +39,7 @@ export function isAuthed() {
   return localStorage.getItem(AUTH_KEY) === 'true';
 }
 
-// ===== seed default (first run) =====
-export function ensureDefaults() {
-  const seeded = readUsers();
-  if (seeded.length) return;
-
-  const now = Date.now();
-  const defaults = [
-    { id: uuid(), name: 'Administrator', username: 'admin', password: 'admin123', role: 'admin',    active: true, createdAt: now },
-    { id: uuid(), name: 'Kasir',         username: 'kasir', password: 'kasir123', role: 'kasir',    active: true, createdAt: now },
-    { id: uuid(), name: 'Keuangan',      username: 'keu',   password: 'keu123',   role: 'keuangan', active: true, createdAt: now },
-
-    // Contoh 1 direktur (optional). Tambah via Admin Users Page untuk PT lain.
-    // { id: uuid(), name: 'Direktur KSS', username: 'dir_kss', password: 'dir123', role: 'direktur', pt: 'PT KSS', active: true, createdAt: now },
-  ];
-  writeUsers(defaults);
-}
-
-// ===== auth =====
 export function login({ username, password }) {
-  ensureDefaults();
   const users = readUsers();
   const u = users.find(x => x.username === username);
 
@@ -71,16 +49,22 @@ export function login({ username, password }) {
   }
 
   localStorage.setItem(AUTH_KEY, 'true');
+
+  if (u.name) {
+    try { localStorage.setItem('auth:name', u.name); } catch {}
+  }
+
   upsertCurrentUser({
     id: u.id,
     name: u.name,
     username: u.username,
-    role: u.role,
-    pt: u.pt,                 // ⬅️ penting: PT ikut tersimpan di session user
+    jobTitle: u.jobTitle || u.title || '',
+    ptAccess: Array.isArray(u.ptAccess) ? u.ptAccess : [],
+    features: Array.isArray(u.features) ? u.features : [],
     mustChangePass: !!u.mustChangePass,
   });
 
-  Audit.loginSuccess(u.username);
+  Audit.loginSuccess(u.username, u.name);
   return { ok: true, user: u };
 }
 
@@ -89,37 +73,8 @@ export function logout() {
   localStorage.removeItem(AUTH_USER);
 }
 
-// ===== users (admin) =====
 export function listUsers() {
-  ensureDefaults();
   return readUsers();
-}
-
-export function createUser({ name, username, password, role = 'kasir', active = true, pt = '' }) {
-  if (!username || !password) return { ok: false, error: 'username/password wajib' };
-  if (role === 'direktur' && !pt) return { ok: false, error: 'Direktur wajib memilih PT' };
-
-  const users = readUsers();
-  if (users.some(u => u.username === username)) {
-    return { ok: false, error: 'Username sudah dipakai' };
-  }
-
-  const u = {
-    id: uuid(),
-    name: name || username,
-    username,
-    password,
-    role,
-    active,
-    pt: pt || undefined,  // ⬅️ simpan PT bila ada
-    createdAt: Date.now(),
-  };
-  users.push(u);
-  writeUsers(users);
-
-  const actor = getCurrentUser()?.username || 'admin';
-  Audit.createUser(actor, u.username, u.role);
-  return { ok: true };
 }
 
 export function setActive(id, active) {
@@ -150,7 +105,6 @@ export function adminResetPassword(id) {
   return { ok: true, tempPassword: temp };
 }
 
-// ===== self-service =====
 export function changePassword({ oldPass, newPass }) {
   const me = getCurrentUser();
   if (!me) return { ok: false, error: 'Belum login' };
@@ -169,7 +123,6 @@ export function changePassword({ oldPass, newPass }) {
   return { ok: true };
 }
 
-// Memperbarui profil user yang sedang login + sync ke USERS
 export function setUser(partial) {
   const me = getCurrentUser();
   if (!me) return { ok: false, error: 'Belum login' };
@@ -182,10 +135,11 @@ export function setUser(partial) {
   if (idx !== -1) {
     users[idx] = {
       ...users[idx],
-      name:     partial.name     ?? users[idx].name,
+      name: partial.name ?? users[idx].name,
       username: partial.username ?? users[idx].username,
-      role:     partial.role     ?? users[idx].role,
-      pt:       partial.pt       ?? users[idx].pt,
+      jobTitle: partial.jobTitle ?? users[idx].jobTitle,
+      ptAccess: Array.isArray(partial.ptAccess) ? Array.from(new Set(partial.ptAccess)) : users[idx].ptAccess,
+      features: Array.isArray(partial.features) ? Array.from(new Set(partial.features)) : users[idx].features,
     };
     writeUsers(users);
   }
@@ -194,5 +148,4 @@ export function setUser(partial) {
   return { ok: true, user: next };
 }
 
-// Alias utk kompatibilitas kode lama
 export const getUser = getCurrentUser;
